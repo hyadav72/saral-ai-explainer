@@ -19,17 +19,29 @@ app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Health check & status endpoint
 app.get('/api/health', (req, res) => {
-  const hasKey = Boolean(
+  const hasClaude = Boolean(
     process.env.ANTHROPIC_API_KEY &&
     process.env.ANTHROPIC_API_KEY !== 'mock' &&
     process.env.ANTHROPIC_API_KEY.trim().length > 10
   );
+  const hasGemini = Boolean(
+    (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY) &&
+    (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY).trim().length > 10
+  );
+
+  let engine = 'ocr-engine';
+  if (hasClaude) engine = 'live-claude';
+  else if (hasGemini) engine = 'live-gemini';
 
   res.json({
     status: 'ok',
     app: 'Saral — AI Document Explainer',
-    aiStatus: hasKey ? 'live-claude' : 'demo-mode',
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+    aiStatus: engine,
+    model: hasClaude
+      ? (process.env.ANTHROPIC_MODEL || 'claude-3-7-sonnet-20250219')
+      : hasGemini
+      ? 'gemini-1.5-flash'
+      : 'tesseract-ocr',
     timestamp: new Date().toISOString()
   });
 });

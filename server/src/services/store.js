@@ -92,6 +92,7 @@ export const historyStore = {
       language: entry.language || 'en',
       readingLevel: entry.readingLevel || 'simple',
       mode: entry.mode || 'text',
+      documentType: entry.documentType || null,
       explanation: entry.explanation || '',
       actionableAdvice: entry.actionableAdvice || '',
       fileName: entry.fileName || null

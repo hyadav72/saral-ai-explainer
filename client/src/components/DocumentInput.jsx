@@ -19,6 +19,7 @@ export default function DocumentInput({
   const [imagePreview, setImagePreview] = useState(null);
   const [pdfWarning, setPdfWarning] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [isSampleDoc, setIsSampleDoc] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -61,6 +62,7 @@ export default function DocumentInput({
         data: base64Data
       });
       setImagePreview(result);
+      setIsSampleDoc(false);
     };
     reader.readAsDataURL(file);
   };
@@ -77,6 +79,7 @@ export default function DocumentInput({
     setImageFile(null);
     setImagePreview(null);
     setPdfWarning(false);
+    setIsSampleDoc(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -86,6 +89,7 @@ export default function DocumentInput({
     setImageFile(null);
     setImagePreview(null);
     setPdfWarning(false);
+    setIsSampleDoc(true);
     onClearError?.();
   };
 
@@ -102,7 +106,8 @@ export default function DocumentInput({
         mode: 'text',
         text: inputText.trim(),
         language: selectedLanguage,
-        readingLevel: selectedLevel
+        readingLevel: selectedLevel,
+        isSample: isSampleDoc
       });
     } else {
       if (!imageFile) {
@@ -117,7 +122,8 @@ export default function DocumentInput({
         },
         fileName: imageFile.name,
         language: selectedLanguage,
-        readingLevel: selectedLevel
+        readingLevel: selectedLevel,
+        isSample: false // Real uploaded photo is NEVER a sample!
       });
     }
   };

@@ -27,6 +27,9 @@ npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 
+# OCR data
+*.traineddata
+
 # Editor & OS
 .vscode/
 .idea/

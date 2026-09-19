@@ -68,16 +68,24 @@ export default function App() {
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        if (data.code === 'NO_TEXT_FOUND') {
+        // Clear previous result so it does not leak into view
+        setCurrentResult(null);
+
+        if (data.code === 'NO_TEXT_FOUND' || data.code === 'UNREADABLE_DOCUMENT') {
+          const isHindi = selectedLanguage === 'hi';
           setToast({
             type: 'error',
-            title: "Couldn't read document",
-            message: data.message || "We couldn't detect readable text in that document. Please try a clearer photo or paste the text directly."
+            title: isHindi ? 'दस्तावेज़ पढ़ा नहीं जा सका' : "Couldn't read document",
+            message:
+              data.message ||
+              (isHindi
+                ? 'मैं इस दस्तावेज़ को ठीक से पढ़ नहीं पाया। कृपया साफ़ फोटो अपलोड करें और दोबारा कोशिश करें।'
+                : "I couldn't read this document clearly. Please upload a clearer photo and try again.")
           });
         } else {
           setToast({
             type: 'error',
-            title: 'Explanation Notice',
+            title: 'Notice',
             message: data.message || 'Something went wrong while simplifying this document. Please try again.'
           });
         }
@@ -99,6 +107,7 @@ export default function App() {
             : `Photo: ${payload.fileName || 'Uploaded image'}`,
           language: data.language,
           readingLevel: data.readingLevel,
+          documentType: data.documentType || '',
           explanation: data.explanation,
           actionableAdvice: data.actionableAdvice
         },

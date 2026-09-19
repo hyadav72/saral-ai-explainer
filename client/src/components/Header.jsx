@@ -58,24 +58,7 @@ export default function Header({ historyCount, onOpenHistory, aiStatus }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {aiStatus === 'demo-mode' ? (
-            <span
-              title="Anthropic API key not set — operating with intelligent built-in sample responses. Set ANTHROPIC_API_KEY in .env for live Claude Sonnet AI."
-              style={{
-                fontSize: '0.78rem',
-                color: 'var(--color-teal)',
-                backgroundColor: 'var(--color-teal-light)',
-                padding: '4px 10px',
-                borderRadius: '12px',
-                border: '1px solid rgba(76, 148, 142, 0.3)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-            >
-              Demo Mode
-            </span>
-          ) : (
+          {aiStatus === 'live-claude' ? (
             <span
               style={{
                 fontSize: '0.78rem',
@@ -89,7 +72,40 @@ export default function Header({ historyCount, onOpenHistory, aiStatus }) {
                 gap: '4px'
               }}
             >
-              <Sparkles size={12} /> Claude AI
+              <Sparkles size={12} /> Claude Vision
+            </span>
+          ) : aiStatus === 'live-gemini' ? (
+            <span
+              style={{
+                fontSize: '0.78rem',
+                color: 'var(--color-lamp)',
+                backgroundColor: 'var(--color-lamp-light)',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                border: '1px solid rgba(231, 161, 60, 0.3)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <Sparkles size={12} /> Gemini Vision
+            </span>
+          ) : (
+            <span
+              title="Real-time Document Vision & OCR engine active. Add ANTHROPIC_API_KEY in .env for Claude LLM."
+              style={{
+                fontSize: '0.78rem',
+                color: 'var(--color-teal)',
+                backgroundColor: 'var(--color-teal-light)',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                border: '1px solid rgba(76, 148, 142, 0.3)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <Sparkles size={12} /> Vision & OCR
             </span>
           )}
 

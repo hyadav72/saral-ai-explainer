@@ -9,13 +9,13 @@ router.post('/', async (req, res, next) => {
     const {
       text,
       image,
-      language = 'en',
+      language = 'hi',
       readingLevel = 'simple',
       deviceId,
-      fileName
+      fileName,
+      isSample = false
     } = req.body;
 
-    // Check if either text or image was supplied
     const hasText = Boolean(text && text.trim().length > 0);
     const hasImage = Boolean(image && image.data && image.data.length > 0);
 
@@ -23,23 +23,26 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({
         success: false,
         code: 'MISSING_INPUT',
-        message: 'Please paste document text or upload a document photo to begin.'
+        message: 'Please paste document text or upload a photo of your document.'
       });
     }
 
-    // Call Claude AI service
+    // Call Multimodal Vision & Document Intelligence Engine
     const result = await generateExplanation({
       text,
       image,
       language,
-      readingLevel
+      readingLevel,
+      isSample
     });
 
     if (result.isNoText) {
       return res.status(200).json({
         success: false,
-        code: 'NO_TEXT_FOUND',
-        message: "We couldn't find readable document text in that input. Please try taking a clearer, well-lit photo or paste the text directly."
+        code: 'UNREADABLE_DOCUMENT',
+        message:
+          result.unreadableMessage ||
+          'मैं इस दस्तावेज़ को ठीक से पढ़ नहीं पाया। कृपया साफ़ फोटो अपलोड करें और दोबारा कोशिश करें।'
       });
     }
 
@@ -54,6 +57,7 @@ router.post('/', async (req, res, next) => {
       language,
       readingLevel,
       mode: hasImage ? 'photo' : 'text',
+      documentType: result.documentType || '',
       explanation: result.explanation,
       actionableAdvice: result.actionableAdvice,
       fileName: fileName || null
@@ -63,6 +67,7 @@ router.post('/', async (req, res, next) => {
       success: true,
       id: savedRecord.id,
       timestamp: savedRecord.timestamp,
+      documentType: result.documentType || '',
       explanation: result.explanation,
       actionableAdvice: result.actionableAdvice,
       rawText: result.rawText,
