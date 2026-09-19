@@ -4,7 +4,10 @@ let workerInstance = null;
 
 async function getWorker() {
   if (!workerInstance) {
-    workerInstance = await createWorker('eng');
+    const cacheDir = process.env.TMPDIR || process.env.TEMP || '/tmp';
+    workerInstance = await createWorker('eng', 1, {
+      cachePath: cacheDir
+    });
   }
   return workerInstance;
 }

@@ -18,7 +18,7 @@ app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Health check & status endpoint
-app.get('/api/health', (req, res) => {
+app.get(['/api/health', '/health'], (req, res) => {
   const hasClaude = Boolean(
     process.env.ANTHROPIC_API_KEY &&
     process.env.ANTHROPIC_API_KEY !== 'mock' &&
@@ -46,9 +46,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API Routes
+// API Routes (supports both /api/ and direct paths for Vercel serverless)
 app.use('/api/explain', explainRoutes);
+app.use('/explain', explainRoutes);
 app.use('/api/history', historyRoutes);
+app.use('/history', historyRoutes);
 
 // In production, serve the built React client if available
 const clientDistPath = path.resolve(__dirname, '../../client/dist');

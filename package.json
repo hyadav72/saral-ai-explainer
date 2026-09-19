@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Saral — AI Document Explainer. Paste it or photograph it. Get it explained like a person would — in your language, read aloud.",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "npm run dev --prefix server",
@@ -10,6 +11,17 @@
     "build": "npm run build --prefix client",
     "start": "node server/src/index.js",
     "postinstall": "npm install --prefix server && npm install --prefix client"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@google/generative-ai": "^0.24.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   },
   "keywords": [
     "ai",
@@ -20,9 +32,6 @@
     "vernacular",
     "hackathon"
   ],
-  "author": "HackDevengers Submission",
-  "license": "MIT",
-  "devDependencies": {
-    "concurrently": "^10.0.5"
-  }
+  "author": "Himanshu",
+  "license": "MIT"
 }
