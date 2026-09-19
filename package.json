@@ -1,0 +1,28 @@
+{
+  "name": "saral-ai-explainer",
+  "version": "1.0.0",
+  "description": "Saral — AI Document Explainer. Paste it or photograph it. Get it explained like a person would — in your language, read aloud.",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "start": "node server/src/index.js",
+    "postinstall": "npm install --prefix server && npm install --prefix client"
+  },
+  "keywords": [
+    "ai",
+    "accessibility",
+    "document-simplifier",
+    "tts",
+    "claude",
+    "vernacular",
+    "hackathon"
+  ],
+  "author": "HackDevengers Submission",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

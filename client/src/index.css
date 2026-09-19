@@ -1,0 +1,252 @@
+:root {
+  --color-ink: #141B18;
+  --color-ink-surface: #1C2420;
+  --color-ink-elevated: #242E29;
+  --color-ink-border: rgba(244, 241, 231, 0.12);
+  --color-ink-border-focus: rgba(231, 161, 60, 0.5);
+
+  --color-paper: #F4F1E7;
+  --color-paper-dark: #2B3530;
+  --color-paper-muted: #6B7670;
+  --color-paper-border: rgba(43, 53, 48, 0.15);
+
+  --color-lamp: #E7A13C;
+  --color-lamp-hover: #D48F2A;
+  --color-lamp-light: rgba(231, 161, 60, 0.15);
+  --color-lamp-text: #141B18;
+
+  --color-teal: #4C948E;
+  --color-teal-light: rgba(76, 148, 142, 0.15);
+
+  --color-rust: #D97757;
+  --color-rust-light: rgba(217, 119, 87, 0.15);
+
+  --color-text-main: #F4F1E7;
+  --color-text-dim: #A4ACA7;
+  --color-text-muted: #7E8782;
+
+  --font-display: 'Source Serif 4', Georgia, serif;
+  --font-body: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  --transition-fast: 0.18s ease;
+  --transition-normal: 0.28s ease;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--color-ink);
+  color: var(--color-text-main);
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  line-height: 1.65;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 64px;
+}
+
+#root {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* Typography */
+h1.brand-headline {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 2.15rem;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--color-paper);
+}
+
+@media (max-width: 480px) {
+  h1.brand-headline {
+    font-size: 1.8rem;
+  }
+}
+
+/* Common Card Styles */
+.card-dark {
+  background-color: var(--color-ink-surface);
+  border: 1px solid var(--color-ink-border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.card-paper {
+  background-color: var(--color-paper);
+  color: var(--color-paper-dark);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* Form Controls & Touch Targets */
+button, input, textarea, select {
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+/* Ensure all buttons have at least 40px touch targets */
+button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  border: none;
+  font-weight: 500;
+}
+
+button:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--color-lamp);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Primary Lamp Button */
+.btn-lamp {
+  background-color: var(--color-lamp);
+  color: var(--color-lamp-text);
+  font-weight: 600;
+  font-size: 1.05rem;
+  padding: 12px 24px;
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(231, 161, 60, 0.25);
+}
+
+.btn-lamp:hover:not(:disabled) {
+  background-color: var(--color-lamp-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(231, 161, 60, 0.35);
+}
+
+.btn-lamp:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Subtle Secondary Button */
+.btn-secondary {
+  background-color: rgba(244, 241, 231, 0.08);
+  color: var(--color-paper);
+  border: 1px solid var(--color-ink-border);
+  padding: 8px 16px;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: rgba(244, 241, 231, 0.14);
+}
+
+/* Pill Tabs */
+.pill-btn {
+  min-height: 40px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-ink-surface);
+  border: 1px solid var(--color-ink-border);
+  color: var(--color-text-dim);
+  font-size: 0.92rem;
+  transition: all var(--transition-fast);
+}
+
+.pill-btn:hover:not(:disabled) {
+  color: var(--color-paper);
+  border-color: rgba(244, 241, 231, 0.25);
+}
+
+.pill-btn.active-lamp {
+  background-color: var(--color-lamp);
+  color: var(--color-lamp-text);
+  border-color: var(--color-lamp);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(231, 161, 60, 0.3);
+}
+
+.pill-btn.active-teal {
+  background-color: var(--color-teal);
+  color: #FFFFFF;
+  border-color: var(--color-teal);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(76, 148, 142, 0.3);
+}
+
+/* Pulse animation for TTS active state */
+@keyframes soundwave {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+.wave-bar {
+  display: inline-block;
+  width: 3px;
+  height: 16px;
+  background-color: currentColor;
+  border-radius: 2px;
+  animation: soundwave 1s ease-in-out infinite;
+}
+.wave-bar:nth-child(2) { animation-delay: 0.2s; }
+.wave-bar:nth-child(3) { animation-delay: 0.4s; }
+
+/* Spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(20, 27, 24, 0.25);
+  border-top-color: var(--color-ink);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+.spinner-light {
+  border-color: rgba(244, 241, 231, 0.25);
+  border-top-color: var(--color-lamp);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(244, 241, 231, 0.2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(244, 241, 231, 0.35);
+}
