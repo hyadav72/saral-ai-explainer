@@ -1,19 +1,47 @@
 import { createWorker } from 'tesseract.js';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Find local tessdata folder
+const candidateDirs = [
+  path.resolve(__dirname, '../../tessdata'),
+  path.resolve(__dirname, '../../../tessdata'),
+  path.resolve(process.cwd(), 'tessdata'),
+  path.resolve(process.cwd(), 'server/tessdata')
+];
+
+let localTessData = null;
+for (const dir of candidateDirs) {
+  if (fs.existsSync(path.join(dir, 'eng.traineddata'))) {
+    localTessData = dir;
+    break;
+  }
+}
 
 let workerInstance = null;
 
 async function getWorker() {
   if (!workerInstance) {
     const cacheDir = process.env.TMPDIR || process.env.TEMP || '/tmp';
-    workerInstance = await createWorker('eng', 1, {
-      cachePath: cacheDir
-    });
+    const options = {
+      cachePath: cacheDir,
+      gzip: false
+    };
+    if (localTessData) {
+      options.langPath = localTessData;
+    }
+    workerInstance = await createWorker('eng', 1, options);
   }
   return workerInstance;
 }
 
 export async function extractTextFromImage(base64Data) {
-  try {
+  // Wrap in a 6.5 second timeout to guarantee it never hangs on serverless functions
+  const ocrPromise = (async () => {
     const buffer = Buffer.from(base64Data, 'base64');
     const worker = await getWorker();
     const ret = await worker.recognize(buffer);
@@ -28,6 +56,22 @@ export async function extractTextFromImage(base64Data) {
       confidence,
       isUnreadable: words.length < 3
     };
+  })();
+
+  const timeoutPromise = new Promise((resolve) => {
+    setTimeout(() => {
+      console.warn('OCR processing hit 6.5s safety limit — continuing with fallback analysis.');
+      resolve({
+        text: '',
+        wordsCount: 0,
+        confidence: 0,
+        isUnreadable: true
+      });
+    }, 6500);
+  });
+
+  try {
+    return await Promise.race([ocrPromise, timeoutPromise]);
   } catch (err) {
     console.error('Tesseract OCR extraction error:', err);
     return {

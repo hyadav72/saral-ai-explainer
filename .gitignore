@@ -29,6 +29,8 @@ pnpm-debug.log*
 
 # OCR data
 *.traineddata
+!tessdata/eng.traineddata
+!server/tessdata/eng.traineddata
 
 # Editor & OS
 .vscode/
