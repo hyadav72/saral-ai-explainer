@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { extractTextFromImage, parseDocumentLocally, I18N } from './ocrAnalyzer.js';
+import { extractTextFromImage, parseDocumentLocally, detectDocumentType, I18N } from './ocrAnalyzer.js';
 
 const LANGUAGE_CONFIG = {
   en: {
@@ -52,10 +52,13 @@ export async function generateExplanation({
   image, // { data: base64String, mediaType: 'image/jpeg' | 'image/png' | ... }
   language = 'hi',
   readingLevel = 'simple',
-  isSample = false
+  isSample = false,
+  fileName = '',
+  clientGeminiKey = null,
+  clientAnthropicKey = null
 }) {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim();
-  const geminiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY)?.trim();
+  const anthropicKey = (clientAnthropicKey || process.env.ANTHROPIC_API_KEY)?.trim();
+  const geminiKey = (clientGeminiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY)?.trim();
 
   const langConfig = LANGUAGE_CONFIG[language] || LANGUAGE_CONFIG.hi;
   const targetLanguage = langConfig.english;
@@ -194,27 +197,24 @@ ${actionPrefix} [Clear, prioritized, practical next steps that the person must t
   // 3. Local OCR & Document Intelligence Engine (Runs offline or as zero-cost engine)
   console.log('⚡ Running Local Document Intelligence & OCR Engine...');
 
-  let documentContent = text;
+  let documentContent = text || '';
 
   if (image && image.data) {
     const ocrResult = await extractTextFromImage(image.data);
     console.log(`OCR extraction: ${ocrResult.wordsCount} words found, confidence ${ocrResult.confidence}%`);
-
-    if (ocrResult.isUnreadable) {
-      return {
-        rawText: langConfig.unreadableMsg,
-        isNoText: true,
-        documentType: '',
-        explanation: '',
-        actionableAdvice: '',
-        unreadableMessage: langConfig.unreadableMsg
-      };
-    }
-    documentContent = ocrResult.text;
+    documentContent = ocrResult.text || '';
   }
 
-  // If text is too short or empty
-  if (!documentContent || documentContent.trim().length < 5) {
+  // Detect document type using both extracted text and fileName
+  const detectedDocType = detectDocumentType(documentContent, fileName);
+  const hasDocHints = Boolean(
+    detectedDocType !== 'other' ||
+    documentContent.trim().length >= 5 ||
+    (fileName && !fileName.match(/^(image|photo|untitled|scan|img_?\d+)\.(jpg|jpeg|png|webp|gif)$/i))
+  );
+
+  // If text is completely empty AND has no identifiable document hints or filename
+  if (!hasDocHints && documentContent.trim().length < 5) {
     return {
       rawText: langConfig.unreadableMsg,
       isNoText: true,
@@ -225,8 +225,8 @@ ${actionPrefix} [Clear, prioritized, practical next steps that the person must t
     };
   }
 
-  // Run local intelligent document analyzer
-  const localResult = parseDocumentLocally(documentContent, language, readingLevel);
+  // Run local intelligent document analyzer with fileName context
+  const localResult = parseDocumentLocally(documentContent, language, readingLevel, fileName);
   return localResult;
 }
 

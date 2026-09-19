@@ -14,7 +14,13 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [toast, setToast] = useState(null);
-  const [aiStatus, setAiStatus] = useState('demo-mode');
+  const [customKey, setCustomKey] = useState(() => localStorage.getItem('saral_custom_key') || '');
+  const [aiStatus, setAiStatus] = useState(() => {
+    const saved = localStorage.getItem('saral_custom_key');
+    if (saved?.startsWith('sk-ant')) return 'live-claude';
+    if (saved?.length > 10) return 'live-gemini';
+    return 'demo-mode';
+  });
 
   const resultRef = useRef(null);
 
@@ -22,17 +28,19 @@ export default function App() {
 
   // Load server status and history on initial mount
   useEffect(() => {
-    // Health check
-    fetch('/api/health')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.aiStatus) {
-          setAiStatus(data.aiStatus);
-        }
-      })
-      .catch((err) => {
-        console.warn('Could not reach backend health check:', err);
-      });
+    if (!customKey) {
+      // Health check
+      fetch('/api/health')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.aiStatus) {
+            setAiStatus(data.aiStatus);
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not reach backend health check:', err);
+        });
+    }
 
     // Fetch past explanations
     fetch(`/api/history?deviceId=${encodeURIComponent(deviceId)}`)
@@ -45,7 +53,21 @@ export default function App() {
       .catch((err) => {
         console.warn('Could not load history:', err);
       });
-  }, [deviceId]);
+  }, [deviceId, customKey]);
+
+  const handleKeyChange = (newKey) => {
+    setCustomKey(newKey);
+    if (!newKey) {
+      fetch('/api/health')
+        .then((r) => r.json())
+        .then((d) => setAiStatus(d.aiStatus || 'demo-mode'))
+        .catch(() => setAiStatus('demo-mode'));
+    } else if (newKey.startsWith('sk-ant')) {
+      setAiStatus('live-claude');
+    } else {
+      setAiStatus('live-gemini');
+    }
+  };
 
   // Handle document submission (text or photo)
   const handleSubmitDocument = async (payload) => {
@@ -53,15 +75,27 @@ export default function App() {
     setToast(null);
 
     try {
+      const activeKey = customKey || localStorage.getItem('saral_custom_key') || '';
+      const reqHeaders = {
+        'Content-Type': 'application/json',
+        'x-device-id': deviceId
+      };
+      if (activeKey) {
+        if (activeKey.startsWith('sk-ant')) {
+          reqHeaders['x-anthropic-api-key'] = activeKey;
+        } else {
+          reqHeaders['x-gemini-api-key'] = activeKey;
+        }
+      }
+
       const response = await fetch('/api/explain', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-device-id': deviceId
-        },
+        headers: reqHeaders,
         body: JSON.stringify({
           ...payload,
-          deviceId
+          deviceId,
+          clientGeminiKey: !activeKey.startsWith('sk-ant') ? activeKey : null,
+          clientAnthropicKey: activeKey.startsWith('sk-ant') ? activeKey : null
         })
       });
 
@@ -159,6 +193,7 @@ export default function App() {
         historyCount={history.length}
         onOpenHistory={() => setIsHistoryOpen(true)}
         aiStatus={aiStatus}
+        onKeyChange={handleKeyChange}
       />
 
       {/* Document Input Section */}

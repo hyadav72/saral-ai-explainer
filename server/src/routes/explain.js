@@ -27,13 +27,19 @@ router.post('/', async (req, res, next) => {
       });
     }
 
+    const clientGeminiKey = req.headers['x-gemini-api-key'] || req.body.clientGeminiKey;
+    const clientAnthropicKey = req.headers['x-anthropic-api-key'] || req.body.clientAnthropicKey;
+
     // Call Multimodal Vision & Document Intelligence Engine
     const result = await generateExplanation({
       text,
       image,
       language,
       readingLevel,
-      isSample
+      isSample,
+      fileName,
+      clientGeminiKey,
+      clientAnthropicKey
     });
 
     if (result.isNoText) {

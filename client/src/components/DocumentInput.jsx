@@ -3,6 +3,63 @@ import { FileText, Camera, Upload, X, AlertCircle } from 'lucide-react';
 import ControlPills from './ControlPills';
 import SamplePicker from './SamplePicker';
 
+function optimizeImage(file, maxDimension = 1600, quality = 0.88) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const rawDataUrl = e.target.result;
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let { width, height } = img;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const optimizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          const base64Data = optimizedDataUrl.split(',')[1];
+          const approxKb = Math.round((base64Data.length * 3) / 4 / 1024);
+
+          resolve({
+            dataUrl: optimizedDataUrl,
+            base64Data,
+            mediaType: 'image/jpeg',
+            sizeDisplay: `${approxKb} KB`
+          });
+        } catch {
+          resolve({
+            dataUrl: rawDataUrl,
+            base64Data: rawDataUrl.split(',')[1],
+            mediaType: file.type || 'image/jpeg',
+            sizeDisplay: (file.size / 1024).toFixed(1) + ' KB'
+          });
+        }
+      };
+      img.onerror = () => {
+        resolve({
+          dataUrl: rawDataUrl,
+          base64Data: rawDataUrl.split(',')[1],
+          mediaType: file.type || 'image/jpeg',
+          sizeDisplay: (file.size / 1024).toFixed(1) + ' KB'
+        });
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function DocumentInput({
   onSubmit,
   isLoading,
@@ -50,21 +107,17 @@ export default function DocumentInput({
       return;
     }
 
-    // Read as base64 for vision API
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target.result;
-      const base64Data = result.split(',')[1];
+    // Optimize and compress image for fast upload and instant OCR
+    optimizeImage(file).then((opt) => {
       setImageFile({
         name: file.name,
-        size: (file.size / 1024).toFixed(1) + ' KB',
-        mediaType: file.type,
-        data: base64Data
+        size: opt.sizeDisplay,
+        mediaType: opt.mediaType,
+        data: opt.base64Data
       });
-      setImagePreview(result);
+      setImagePreview(opt.dataUrl);
       setIsSampleDoc(false);
-    };
-    reader.readAsDataURL(file);
+    });
   };
 
   const handleDrop = (e) => {

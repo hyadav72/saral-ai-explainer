@@ -6,19 +6,30 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Find local tessdata folder
+// Find local tessdata folder across normal and serverless environments
 const candidateDirs = [
   path.resolve(__dirname, '../../tessdata'),
   path.resolve(__dirname, '../../../tessdata'),
+  path.resolve(__dirname, '../../api/tessdata'),
+  path.resolve(__dirname, '../../../api/tessdata'),
   path.resolve(process.cwd(), 'tessdata'),
-  path.resolve(process.cwd(), 'server/tessdata')
+  path.resolve(process.cwd(), 'server/tessdata'),
+  path.resolve(process.cwd(), 'api/tessdata'),
+  '/var/task/tessdata',
+  '/var/task/server/tessdata',
+  '/var/task/api/tessdata'
 ];
 
 let localTessData = null;
 for (const dir of candidateDirs) {
-  if (fs.existsSync(path.join(dir, 'eng.traineddata'))) {
-    localTessData = dir;
-    break;
+  try {
+    if (fs.existsSync(path.join(dir, 'eng.traineddata'))) {
+      localTessData = dir;
+      console.log('✅ Found local tessdata at:', dir);
+      break;
+    }
+  } catch {
+    // Ignore permission/missing path errors
   }
 }
 
@@ -40,45 +51,49 @@ async function getWorker() {
 }
 
 export async function extractTextFromImage(base64Data) {
-  // Wrap in a 6.5 second timeout to guarantee it never hangs on serverless functions
+  let timerId = null;
   const ocrPromise = (async () => {
     const buffer = Buffer.from(base64Data, 'base64');
     const worker = await getWorker();
     const ret = await worker.recognize(buffer);
     const rawText = (ret.data?.text || '').trim();
 
-    const words = rawText.match(/[a-zA-Z0-9]{2,}/g) || [];
+    // Include Devanagari and Latin letters
+    const words = rawText.match(/[a-zA-Z0-9\u0900-\u097F]{2,}/g) || [];
     const confidence = ret.data?.confidence || 0;
 
     return {
       text: rawText,
       wordsCount: words.length,
       confidence,
-      isUnreadable: words.length < 3
+      isUnreadable: words.length === 0 && rawText.length < 3
     };
   })();
 
   const timeoutPromise = new Promise((resolve) => {
-    setTimeout(() => {
-      console.warn('OCR processing hit 6.5s safety limit — continuing with fallback analysis.');
+    timerId = setTimeout(() => {
+      console.warn('OCR processing hit 9s safety limit — continuing with fallback document analysis.');
       resolve({
         text: '',
         wordsCount: 0,
         confidence: 0,
-        isUnreadable: true
+        isUnreadable: false
       });
-    }, 6500);
+    }, 9000);
   });
 
   try {
-    return await Promise.race([ocrPromise, timeoutPromise]);
+    const result = await Promise.race([ocrPromise, timeoutPromise]);
+    if (timerId) clearTimeout(timerId);
+    return result;
   } catch (err) {
+    if (timerId) clearTimeout(timerId);
     console.error('Tesseract OCR extraction error:', err);
     return {
       text: '',
       wordsCount: 0,
       confidence: 0,
-      isUnreadable: true
+      isUnreadable: false
     };
   }
 }
@@ -212,8 +227,36 @@ export const I18N = {
   }
 };
 
-export function detectDocumentType(text) {
-  const lower = (text || '').toLowerCase();
+export function detectDocumentType(text, fileName = '') {
+  const combined = `${text || ''} ${fileName || ''}`.toLowerCase();
+
+  // Certificate (OBC NCL, Caste, Category, Income, EWS, Domicile, Passing)
+  const certTerms = [
+    'certificate',
+    'certify that',
+    'hereby certify',
+    'obc',
+    'ncl',
+    'non creamy layer',
+    'non-creamy layer',
+    'creamy layer',
+    'caste',
+    'community certificate',
+    'backward class',
+    'praman patra',
+    'pramank',
+    'anusucheet',
+    'income certificate',
+    'ews',
+    'domicile',
+    'residence certificate',
+    'bonafide',
+    'passing certificate',
+    'degree certificate'
+  ];
+  if (certTerms.some((term) => combined.includes(term))) {
+    return 'certificate';
+  }
 
   const marksheetTerms = [
     'marksheet',
@@ -242,87 +285,92 @@ export function detectDocumentType(text) {
     'failed',
     'subject code'
   ];
-  if (marksheetTerms.filter((term) => lower.includes(term)).length >= 2 || lower.includes('marksheet') || lower.includes('statement of marks')) {
+  if (
+    marksheetTerms.filter((term) => combined.includes(term)).length >= 2 ||
+    combined.includes('marksheet') ||
+    combined.includes('mark sheet') ||
+    combined.includes('statement of marks') ||
+    combined.includes('gradesheet')
+  ) {
     return 'marksheet';
   }
 
   if (
-    lower.includes('aadhaar') ||
-    lower.includes('unique identification') ||
-    (lower.includes('government of india') && (lower.includes('dob') || lower.includes('uidai'))) ||
-    lower.includes('income tax department') ||
-    lower.includes('permanent account number')
+    combined.includes('aadhaar') ||
+    combined.includes('unique identification') ||
+    (combined.includes('government of india') && (combined.includes('dob') || combined.includes('uidai'))) ||
+    combined.includes('income tax department') ||
+    combined.includes('permanent account number') ||
+    combined.includes('pan card') ||
+    combined.includes('voter id')
   ) {
     return 'identity';
   }
 
   if (
-    lower.includes('hospital') ||
-    lower.includes('patient') ||
-    lower.includes('discharge') ||
-    lower.includes('admission date') ||
-    lower.includes('physician') ||
-    lower.includes('diagnosis') ||
-    lower.includes('ipd') ||
-    lower.includes('opd') ||
-    lower.includes('clinic')
+    combined.includes('hospital') ||
+    combined.includes('patient') ||
+    combined.includes('discharge') ||
+    combined.includes('admission date') ||
+    combined.includes('physician') ||
+    combined.includes('diagnosis') ||
+    combined.includes('ipd') ||
+    combined.includes('opd') ||
+    combined.includes('clinic') ||
+    combined.includes('medical')
   ) {
     return 'medical';
   }
 
   if (
-    lower.includes('insurance') ||
-    lower.includes('policy') ||
-    lower.includes('claim') ||
-    lower.includes('sum insured') ||
-    lower.includes('tpa') ||
-    lower.includes('repudiation')
+    combined.includes('insurance') ||
+    combined.includes('policy') ||
+    combined.includes('claim') ||
+    combined.includes('sum insured') ||
+    combined.includes('tpa') ||
+    combined.includes('repudiation') ||
+    combined.includes('mediclaim')
   ) {
     return 'insurance';
   }
 
   if (
-    lower.includes('bank') ||
-    lower.includes('account number') ||
-    lower.includes('ifsc') ||
-    lower.includes('account statement') ||
-    (lower.includes('debit') && lower.includes('credit'))
+    combined.includes('bank') ||
+    combined.includes('account number') ||
+    combined.includes('ifsc') ||
+    combined.includes('account statement') ||
+    (combined.includes('debit') && combined.includes('credit')) ||
+    combined.includes('passbook')
   ) {
     return 'bank';
   }
 
   if (
-    lower.includes('legal notice') ||
-    lower.includes('advocate') ||
-    lower.includes('notice to vacate') ||
-    lower.includes('lease') ||
-    lower.includes('tenancy') ||
-    lower.includes('court')
+    combined.includes('legal notice') ||
+    combined.includes('advocate') ||
+    combined.includes('notice to vacate') ||
+    combined.includes('lease') ||
+    combined.includes('tenancy') ||
+    combined.includes('court') ||
+    combined.includes('eviction')
   ) {
     return 'legal';
   }
 
   if (
-    lower.includes('invoice') ||
-    lower.includes('gstin') ||
-    lower.includes('tax invoice') ||
-    lower.includes('bill to')
+    combined.includes('invoice') ||
+    combined.includes('gstin') ||
+    combined.includes('tax invoice') ||
+    combined.includes('bill to') ||
+    combined.includes('receipt')
   ) {
     return 'invoice';
   }
 
   if (
-    lower.includes('certificate') ||
-    lower.includes('certify that') ||
-    lower.includes('hereby certify')
-  ) {
-    return 'certificate';
-  }
-
-  if (
-    lower.includes('application form') ||
-    lower.includes('applicant') ||
-    lower.includes('registration form')
+    combined.includes('application form') ||
+    combined.includes('applicant') ||
+    combined.includes('registration form')
   ) {
     return 'application';
   }
@@ -330,11 +378,11 @@ export function detectDocumentType(text) {
   return 'other';
 }
 
-export function parseDocumentLocally(text, language = 'hi', readingLevel = 'simple') {
+export function parseDocumentLocally(text, language = 'hi', readingLevel = 'simple', fileName = '') {
   const i18n = I18N[language] || I18N.hi;
-  const docType = detectDocumentType(text);
+  const docType = detectDocumentType(text, fileName);
   const docTypeLabel = i18n.types[docType] || i18n.types.other;
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = (text || '').split('\n').map((l) => l.trim()).filter(Boolean);
 
   let whatIs = '';
   const details = [];
@@ -566,6 +614,127 @@ export function parseDocumentLocally(text, language = 'hi', readingLevel = 'simp
       details.push(`Holder Details: As verified on the physical card`);
       whatMeans = 'This credential functions as legal proof of identity and residency for banking, civil services, and official applications.';
       whatToDo = `${i18n.actionTitle} Maintain this ID credential securely and avoid sharing sensitive identity numbers with unverified third parties.`;
+    }
+  } else if (docType === 'certificate') {
+    const lowerCombined = `${text || ''} ${fileName || ''}`.toLowerCase();
+    const isObcOrCaste =
+      lowerCombined.includes('obc') ||
+      lowerCombined.includes('backward class') ||
+      lowerCombined.includes('caste') ||
+      lowerCombined.includes('community') ||
+      lowerCombined.includes('ncl') ||
+      lowerCombined.includes('creamy');
+
+    let certNumber = null;
+    let holderName = null;
+    let authority = null;
+    let casteName = null;
+    let issueDate = null;
+
+    for (const line of lines) {
+      const l = line.toLowerCase();
+      if (!certNumber && (l.includes('cert') || l.includes('ref') || l.includes('no.') || l.includes('sankhya') || l.includes('क्रमांक'))) {
+        const parts = line.split(/[:\-]/);
+        if (parts[1] && parts[1].trim().length > 1) certNumber = parts[1].trim();
+      }
+      if (!holderName && (l.includes('name') || l.includes('shri') || l.includes('smt') || l.includes('kumar') || l.includes('son of') || l.includes('daughter of') || l.includes('s/o') || l.includes('d/o'))) {
+        holderName = line;
+      }
+      if (!authority && (l.includes('tehsildar') || l.includes('sdm') || l.includes('magistrate') || l.includes('officer') || l.includes('तहसीलदार') || l.includes('प्राधिकारी'))) {
+        authority = line;
+      }
+      if (!issueDate && (l.includes('date') || l.includes('dated') || l.includes('दिनांक') || l.includes('जारी'))) {
+        issueDate = line;
+      }
+      if (!casteName && (l.includes('caste') || l.includes('community') || l.includes('वर्ग') || l.includes('जाति'))) {
+        casteName = line;
+      }
+    }
+
+    if (language === 'hi') {
+      whatIs = isObcOrCaste
+        ? 'यह भारत सरकार / राज्य सरकार द्वारा जारी आधिकारिक अन्य पिछड़ा वर्ग (OBC - Non Creamy Layer) / जाति प्रमाण पत्र है। यह प्रमाणित करता है कि धारक मान्यता प्राप्त पिछड़े समुदाय से संबंधित है और परिवार की आय क्रीमी लेयर की निर्धारित सीमा के अंतर्गत है।'
+        : 'यह सक्षम प्राधिकारी द्वारा जारी आधिकारिक प्रमाण पत्र (Certificate) है जो किसी व्यक्ति की योग्यता या नागरिक प्रास्थिति की पुष्टि करता है।';
+      details.push(`प्रमाण पत्र संख्या: ${certNumber || i18n.notVisible}`);
+      details.push(`आवेदक / धारक का नाम: ${holderName || (fileName ? fileName.replace(/\.[^/.]+$/, '') : i18n.notVisible)}`);
+      details.push(`जाति / वर्ग (Caste / Category): ${casteName || (isObcOrCaste ? 'अन्य पिछड़ा वर्ग (OBC - Non Creamy Layer)' : i18n.notVisible)}`);
+      details.push(`जारीकर्ता प्राधिकारी: ${authority || i18n.notVisible}`);
+      details.push(`जारी करने की तिथि: ${issueDate || i18n.notVisible}`);
+      details.push(`वैधता (Validity): सामान्यतः एक वित्तीय वर्ष (1 Financial Year)`);
+      whatMeans = isObcOrCaste
+        ? 'इस प्रमाण पत्र का मतलब है कि आप केंद्रीय व राज्य स्तरीय सरकारी नौकरियों (UPSC, SSC, रेलवे, बैंकिंग आदि) तथा उच्च शिक्षण संस्थानों (IIT, NIT, IIM, मेडिकल कॉलेज) में ओबीसी आरक्षण एवं आयु सीमा में छूट के लिए पूरी तरह पात्र हैं।'
+        : 'यह आधिकारिक प्रमाण पत्र संबंधित विभाग या संस्थान में आपकी पात्रता और अभिलेखों की कानूनी पुष्टि करता है।';
+      whatToDo = `${i18n.actionTitle} इस मूल प्रमाण पत्र को सुरक्षित लैमिनेट या वाटरप्रूफ फाइल में रखें। ध्यान दें कि केंद्रीय भर्ती में केंद्र सरकार प्रारूप और राज्य भर्ती में राज्य प्रारूप ही मान्य होता है। ओबीसी-एनसीएल प्रमाण पत्र सामान्यतः 1 वर्ष के लिए वैध रहता है, अतः समय पर इसका नवीनीकरण (Renewal) करा लें।`;
+    } else if (language === 'bn') {
+      whatIs = isObcOrCaste
+        ? 'এটি ভারত সরকার বা রাজ্য সরকার কর্তৃক অনুমোদিত অন্যান্য অনগ্রসর শ্রেণি (OBC - Non Creamy Layer) / জাতিগত শংসাপত্র।'
+        : 'এটি উপযুক্ত সরকারি কর্তৃপক্ষ দ্বারা জারি করা একটি আনুষ্ঠানিক শংসাপত্র (Certificate)।';
+      details.push(`শংসাপত্র নম্বর: ${certNumber || i18n.notVisible}`);
+      details.push(`আবেদনকারীর নাম: ${holderName || i18n.notVisible}`);
+      details.push(`জাতি / শ্রেণি: ${casteName || (isObcOrCaste ? 'OBC (Non Creamy Layer)' : i18n.notVisible)}`);
+      details.push(`প্রদানকারী কর্তৃপক্ষ: ${authority || i18n.notVisible}`);
+      details.push(`ইস্যুর তারিখ: ${issueDate || i18n.notVisible}`);
+      details.push(`মেয়াদ: সাধারণত ১ আর্থিক বছর`);
+      whatMeans = isObcOrCaste
+        ? 'এর অর্থ আপনি সরকারি চাকরি ও উচ্চশিক্ষা প্রতিষ্ঠানে ওবিসি সংরক্ষণ ও বয়সের ছাড়ের জন্য সম্পূর্ণ যোগ্য।'
+        : 'এই শংসাপত্রটি আপনার योग्यता ও পরিচয়ের বৈধ আইনি প্রমাণ।';
+      whatToDo = `${i18n.actionTitle} এই মূল শংসাপত্রটি নিরাপদে সংরক্ষণ করুন এবং মেয়াদ শেষ হওয়ার আগে সময়মতো পুনর্নবীকরণ করিয়ে রাখুন।`;
+    } else if (language === 'ta') {
+      whatIs = isObcOrCaste
+        ? 'இது அரசு அதிகாரியால் வழங்கப்பட்ட இதர பிற்படுத்தப்பட்ட வகுப்பினர் (OBC - Non Creamy Layer) / சாதிச் சான்றிதழ் ஆகும்.'
+        : 'இது தகுதி வாய்ந்த அதிகாரியால் வழங்கப்பட்ட அதிகாரப்பூர்வ சான்றிதழ் ஆகும்.';
+      details.push(`சான்றிதழ் எண்: ${certNumber || i18n.notVisible}`);
+      details.push(`விண்ணப்பதாரர் பெயர்: ${holderName || i18n.notVisible}`);
+      details.push(`வகுப்பு / சாதி: ${casteName || (isObcOrCaste ? 'OBC (Non Creamy Layer)' : i18n.notVisible)}`);
+      details.push(`வழங்கிய அதிகாரி: ${authority || i18n.notVisible}`);
+      details.push(`வழங்கப்பட்ட தேதி: ${issueDate || i18n.notVisible}`);
+      details.push(`செல்லுபடியாகும் காலம்: பொதுவாக 1 நிதியாண்டு`);
+      whatMeans = isObcOrCaste
+        ? 'அரசு வேலைவாய்ப்புகள் மற்றும் கல்லூரிகளில் இடஒதுக்கீடு மற்றும் வயது வரம்பு சலுகை பெற நீங்கள் தகுதியுடையவர் என்பதை இது உறுதிப்படுத்துகிறது.'
+        : 'இந்தச் சான்றிதழ் உங்கள் தகுதிக்கான அதிகாரப்பூர்வ சட்டபூர்வ ஆவணமாகும்.';
+      whatToDo = `${i18n.actionTitle} இந்த அசல் சான்றிதழைப் பாதுகாப்பாக வைத்து, தேவைக்கேற்ப சரியான நேரத்தில் புதுப்பித்துக் கொள்ளுங்கள்.`;
+    } else if (language === 'te') {
+      whatIs = isObcOrCaste
+        ? 'ఇది ప్రభుత్వం జారీ చేసిన ఇతర వెనుకబడిన తరగతుల (OBC - Non Creamy Layer) / కుల ధ్రువీకరణ పత్రం.'
+        : 'ఇది సంబంధిత అధికారి జారీ చేసిన అధికారిక ధ్రువీకరణ పత్రం (Certificate).';
+      details.push(`సర్టిఫికేట్ నంబర్: ${certNumber || i18n.notVisible}`);
+      details.push(`దరఖాస్తుదారుని పేరు: ${holderName || i18n.notVisible}`);
+      details.push(`కులం / కేటగిరీ: ${casteName || (isObcOrCaste ? 'OBC (Non Creamy Layer)' : i18n.notVisible)}`);
+      details.push(`జారీ చేసిన అధికారి: ${authority || i18n.notVisible}`);
+      details.push(`జారీ చేసిన తేదీ: ${issueDate || i18n.notVisible}`);
+      details.push(`చెల్లుబాటు: సాధారణంగా 1 ఆర్థిక సంవత్సరం`);
+      whatMeans = isObcOrCaste
+        ? 'ప్రభుత్వ ఉద్యోగాలు మరియు ఉన్నత విద్యా ప్రవేశాలలో ఓబీసీ రిజర్వేషన్ మరియు వయోపరిమితి సడలింపు పొందేందుకు మీరు అర్హులని ఇది ధ్రువీకరిస్తుంది.'
+        : 'ఈ పత్రం వివిధ అధికారిక కార్యకలాపాలలో మీ అర్హతకు చట్టపరమైన రుజువుగా పనిచేస్తుంది.';
+      whatToDo = `${i18n.actionTitle} ఈ ఒరిజినల్ సర్టిఫికేట్‌ను భద్రపరుచుకోండి మరియు గడువు ముగిసేలోగా అవసరమైనప్పుడు రెన్యూవల్ చేసుకోండి.`;
+    } else if (language === 'mr') {
+      whatIs = isObcOrCaste
+        ? 'हे भारत सरकार किंवा राज्य सरकारद्वारे सक्षम प्राधिकाऱ्याने दिलेले इतर मागासवर्गीय (OBC - Non Creamy Layer) / जात प्रमाणपत्र आहे.'
+        : 'हे सक्षम प्राधिकरणाने जारी केलेले अधिकृत प्रमाणपत्र (Certificate) आहे.';
+      details.push(`प्रमाणपत्र क्रमांक: ${certNumber || i18n.notVisible}`);
+      details.push(`अर्जदाराचे नाव: ${holderName || i18n.notVisible}`);
+      details.push(`जात / प्रवर्ग: ${casteName || (isObcOrCaste ? 'इतर मागासवर्गीय (OBC - Non Creamy Layer)' : i18n.notVisible)}`);
+      details.push(`वितरक अधिकारी: ${authority || i18n.notVisible}`);
+      details.push(`दिनांक: ${issueDate || i18n.notVisible}`);
+      details.push(`वैधता: सामान्यतः १ आर्थिक वर्ष`);
+      whatMeans = isObcOrCaste
+        ? 'याचा अर्थ असा की आपण सरकारी नोकऱ्या आणि उच्च शिक्षण प्रवेशांमध्ये ओबीसी आरक्षण आणि वयोमर्यादेतील सवलतीसाठी पूर्णपणे पात्र आहात.'
+        : 'हे प्रमाणपत्र अधिकृत कामांमध्ये आपल्या पात्रतेचा वैध कायदेशीर पुरावा आहे.';
+      whatToDo = `${i18n.actionTitle} हे मूळ प्रमाणपत्र सुरक्षित फाइलमध्ये ठेवा आणि ओबीसी-एनसीएलचे वेळेत नूतनीकरण (Renewal) करून घ्या.`;
+    } else {
+      whatIs = isObcOrCaste
+        ? 'This is an official Other Backward Classes (OBC) Non-Creamy Layer / Caste Certificate issued by the competent revenue authority.'
+        : 'This is an official statutory certificate issued by a competent governmental authority.';
+      details.push(`Certificate / Reference No: ${certNumber || i18n.notVisible}`);
+      details.push(`Candidate Name: ${holderName || (fileName ? fileName.replace(/\.[^/.]+$/, '') : i18n.notVisible)}`);
+      details.push(`Caste / Category: ${casteName || (isObcOrCaste ? 'Other Backward Classes (OBC - Non Creamy Layer)' : i18n.notVisible)}`);
+      details.push(`Issuing Authority: ${authority || i18n.notVisible}`);
+      details.push(`Issue Date: ${issueDate || i18n.notVisible}`);
+      details.push(`Statutory Validity: Typically valid for one financial year`);
+      whatMeans = isObcOrCaste
+        ? 'This official document certifies eligibility for quota reservations, fee concessions, and age relaxation in Central & State Government recruitments and university admissions.'
+        : 'This credential verifies your official eligibility, identity, or qualification before institutional and government authorities.';
+      whatToDo = `${i18n.actionTitle} Maintain this original certificate safely in a protective folder. For central exams, ensure the certificate follows the Government of India format, and arrange for timely annual renewal.`;
     }
   } else {
     if (language === 'hi') {
