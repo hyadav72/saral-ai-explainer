@@ -1,6 +1,5 @@
 import { createWorker } from 'tesseract.js';
 
-// Cache worker for performance
 let workerInstance = null;
 
 async function getWorker() {
@@ -17,7 +16,6 @@ export async function extractTextFromImage(base64Data) {
     const ret = await worker.recognize(buffer);
     const rawText = (ret.data?.text || '').trim();
 
-    // Count meaningful alphanumeric words
     const words = rawText.match(/[a-zA-Z0-9]{2,}/g) || [];
     const confidence = ret.data?.confidence || 0;
 
@@ -38,7 +36,6 @@ export async function extractTextFromImage(base64Data) {
   }
 }
 
-// Multilingual labels for document types and sections
 export const I18N = {
   en: {
     docTypeTitle: 'Document type:',
@@ -54,10 +51,10 @@ export const I18N = {
       medical: 'Medical Report / Hospital Bill',
       insurance: 'Insurance Notice / Claim Document',
       bank: 'Bank Document / Statement',
-      legal: 'Legal Notice / Agreement',
-      invoice: 'Invoice / Purchase Bill',
+      legal: 'Legal Notice / Tenancy Agreement',
+      invoice: 'Invoice / Bill',
       certificate: 'Certificate',
-      application: 'Application / Registration Form',
+      application: 'Application Form',
       other: 'Official Document'
     }
   },
@@ -171,7 +168,6 @@ export const I18N = {
 export function detectDocumentType(text) {
   const lower = (text || '').toLowerCase();
 
-  // Marksheet detection
   const marksheetTerms = [
     'marksheet',
     'mark sheet',
@@ -187,7 +183,6 @@ export function detectDocumentType(text) {
     'cbse',
     'icse',
     'board of',
-    'university',
     'theory',
     'practical',
     'maximum marks',
@@ -198,26 +193,22 @@ export function detectDocumentType(text) {
     'percentage',
     'passed',
     'failed',
-    'division',
     'subject code'
   ];
-  const marksheetHits = marksheetTerms.filter((term) => lower.includes(term)).length;
-  if (marksheetHits >= 2 || lower.includes('marksheet') || lower.includes('statement of marks')) {
+  if (marksheetTerms.filter((term) => lower.includes(term)).length >= 2 || lower.includes('marksheet') || lower.includes('statement of marks')) {
     return 'marksheet';
   }
 
-  // Identity / Aadhaar detection
   if (
     lower.includes('aadhaar') ||
     lower.includes('unique identification') ||
-    lower.includes('government of india') && (lower.includes('dob') || lower.includes('uidai')) ||
+    (lower.includes('government of india') && (lower.includes('dob') || lower.includes('uidai'))) ||
     lower.includes('income tax department') ||
     lower.includes('permanent account number')
   ) {
     return 'identity';
   }
 
-  // Medical bill / Discharge
   if (
     lower.includes('hospital') ||
     lower.includes('patient') ||
@@ -232,7 +223,6 @@ export function detectDocumentType(text) {
     return 'medical';
   }
 
-  // Insurance
   if (
     lower.includes('insurance') ||
     lower.includes('policy') ||
@@ -244,18 +234,16 @@ export function detectDocumentType(text) {
     return 'insurance';
   }
 
-  // Bank
   if (
     lower.includes('bank') ||
     lower.includes('account number') ||
     lower.includes('ifsc') ||
     lower.includes('account statement') ||
-    lower.includes('debit') && lower.includes('credit')
+    (lower.includes('debit') && lower.includes('credit'))
   ) {
     return 'bank';
   }
 
-  // Legal notice / Agreement
   if (
     lower.includes('legal notice') ||
     lower.includes('advocate') ||
@@ -267,7 +255,6 @@ export function detectDocumentType(text) {
     return 'legal';
   }
 
-  // Invoice / Bill
   if (
     lower.includes('invoice') ||
     lower.includes('gstin') ||
@@ -277,7 +264,6 @@ export function detectDocumentType(text) {
     return 'invoice';
   }
 
-  // Certificate
   if (
     lower.includes('certificate') ||
     lower.includes('certify that') ||
@@ -286,7 +272,6 @@ export function detectDocumentType(text) {
     return 'certificate';
   }
 
-  // Application
   if (
     lower.includes('application form') ||
     lower.includes('applicant') ||
@@ -298,9 +283,8 @@ export function detectDocumentType(text) {
   return 'other';
 }
 
-// Local Document Intelligence Parser using extracted text
-export function parseDocumentLocally(text, language = 'en', readingLevel = 'simple') {
-  const i18n = I18N[language] || I18N.en;
+export function parseDocumentLocally(text, language = 'hi', readingLevel = 'simple') {
+  const i18n = I18N[language] || I18N.hi;
   const docType = detectDocumentType(text);
   const docTypeLabel = i18n.types[docType] || i18n.types.other;
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -311,7 +295,6 @@ export function parseDocumentLocally(text, language = 'en', readingLevel = 'simp
   let whatToDo = '';
 
   if (docType === 'marksheet') {
-    // Extract Student Info
     let studentName = null;
     let rollNo = null;
     let courseName = null;
@@ -330,47 +313,28 @@ export function parseDocumentLocally(text, language = 'en', readingLevel = 'simp
           rollNo = parts[1].trim();
         }
       }
-      if (!courseName && (l.includes('class') || l.includes('standard') || l.includes('course') || l.includes('semester') || l.includes('bachelor') || l.includes('b.tech') || l.includes('b.a') || l.includes('cbse') || l.includes('board'))) {
+      if (!courseName && (l.includes('class') || l.includes('standard') || l.includes('course') || l.includes('semester') || l.includes('cbse') || l.includes('board'))) {
         courseName = line;
       }
     }
 
-    // Extract subjects and marks
     const subjectList = [];
     const commonSubjects = [
-      'english',
-      'hindi',
-      'mathematics',
-      'math',
-      'science',
-      'physics',
-      'chemistry',
-      'biology',
-      'social science',
-      'history',
-      'geography',
-      'computer',
-      'economics',
-      'accountancy',
-      'business studies',
-      'sanskrit'
+      'english', 'hindi', 'mathematics', 'math', 'science', 'physics',
+      'chemistry', 'biology', 'social', 'history', 'geography', 'computer',
+      'economics', 'accountancy', 'business', 'sanskrit', 'bengali', 'tamil', 'telugu', 'marathi'
     ];
 
     for (const line of lines) {
       const lower = line.toLowerCase();
       for (const subj of commonSubjects) {
         if (lower.includes(subj)) {
-          // Look for numbers in this line
-          const numbers = line.match(/\b\d{1,3}\b/g);
-          if (numbers && numbers.length > 0) {
-            subjectList.push(`${line}`);
-          }
+          subjectList.push(line);
           break;
         }
       }
     }
 
-    // Extract total, percentage, pass/fail
     let totalMarks = null;
     let percentage = null;
     let resultStatus = null;
@@ -390,14 +354,14 @@ export function parseDocumentLocally(text, language = 'en', readingLevel = 'simp
 
     if (language === 'hi') {
       whatIs = readingLevel === 'simple'
-        ? 'यह एक स्कूल या कॉलेज की अंकतालिका (मार्कशीट) है, जिसमें विद्यार्थी के परीक्षा परिणाम और अंकों का विवरण दिया गया है।'
-        : 'यह एक शैक्षणिक अंकतालिका (स्टेटमेंट ऑफ मार्क्स) है, जिसमें विद्यार्थी द्वारा संबंधित परीक्षा में अर्जित किए गए विषयवार अंकों, कुल प्राप्तांक और परिणाम का अधिकृत विवरण दर्ज है।';
+        ? 'यह एक स्कूल या कॉलेज की अंकतालिका (मार्कशीट) है। इसमें विद्यार्थी द्वारा परीक्षा में हासिल किए गए विषयवार अंकों और अंतिम परिणाम की जानकारी दी गई है।'
+        : 'यह एक शैक्षणिक अंकतालिका (स्टेटमेंट ऑफ मार्क्स) है। इसमें विद्यार्थी के विभिन्न विषयों के सैद्धांतिक एवं प्रायोगिक प्राप्तांक, कुल योग और उत्तीर्णता की स्थिति का आधिकारिक ब्यौरा दर्ज है।';
 
       details.push(`विद्यार्थी का नाम: ${studentName || i18n.notVisible}`);
       details.push(`अनुक्रमांक (Roll No): ${rollNo || i18n.notVisible}`);
-      details.push(`कक्षा / परीक्षा: ${courseName || i18n.notVisible}`);
+      details.push(`कक्षा व बोर्ड: ${courseName || i18n.notVisible}`);
       if (subjectList.length > 0) {
-        details.push(`दिखाई दे रहे विषय व अंक: ${subjectList.slice(0, 5).join('; ')}`);
+        details.push(`दिखाई दे रहे विषय व अंक: ${subjectList.slice(0, 6).join('; ')}`);
       } else {
         details.push(`विषय व अंक: ${i18n.notVisible}`);
       }
@@ -406,20 +370,64 @@ export function parseDocumentLocally(text, language = 'en', readingLevel = 'simp
       details.push(`परिणाम (Result): ${resultStatus || i18n.notVisible}`);
 
       whatMeans = readingLevel === 'simple'
-        ? 'यह दस्तावेज़ दिखाता है कि विद्यार्थी ने परीक्षा दी है और उनके अंक इसमें दर्ज हैं। यदि पास लिखा है तो विद्यार्थी अगली कक्षा में जा सकते हैं।'
-        : 'यह आधिकारिक दस्तावेज़ प्रमाणित करता है कि विद्यार्थी ने उक्त परीक्षा संपन्न की है। कुल प्राप्तांक एवं श्रेणी के आधार पर अगली कक्षा या उच्च शिक्षा में प्रवेश की पात्रता निर्धारित होगी।';
+        ? 'इसका सीधा मतलब यह है कि विद्यार्थी ने यह परीक्षा पास कर ली है और वे अब आगे की कक्षा, कॉलेज में प्रवेश या छात्रवृत्ति के लिए पूरी तरह योग्य हैं।'
+        : 'यह आधिकारिक प्रमाण पत्र प्रमाणित करता है कि विद्यार्थी ने निर्धारित पाठ्यक्रम को सफलतापूर्वक उत्तीर्ण कर लिया है। कुल प्रतिशत के आधार पर आगामी उच्च शिक्षा संस्थानों में प्रवेश की पात्रता निर्धारित होगी।';
 
-      whatToDo = `${i18n.actionTitle} इस मूल अंकतालिका को सुरक्षित लैमिनेट या फाइल करके रखें और आगे के दाखिले या छात्रवृत्ति के लिए इसकी कुछ फोटोकॉपी करवा लें।`;
+      whatToDo = `${i18n.actionTitle} इस मूल अंकतालिका को सुरक्षित लैमिनेट या वाटरप्रूफ फाइल में रखें। आगे कॉलेज दाखिले, छात्रवृत्ति या नौकरी के लिए इसकी कम से कम चार-पांच सत्यापित फोटोकॉपी अपने पास तैयार रखें।`;
+    } else if (language === 'bn') {
+      whatIs = 'এটি একটি শিক্ষা প্রতিষ্ঠানের নম্বরপত্র বা মার্কশিট, যেখানে শিক্ষার্থীর প্রাপ্ত নম্বর ও পরীক্ষার ফলাফল নথিভুক্ত রয়েছে।';
+      details.push(`শিক্ষার্থীর নাম: ${studentName || i18n.notVisible}`);
+      details.push(`রোল নম্বর: ${rollNo || i18n.notVisible}`);
+      details.push(`শ্রেণী ও বোর্ড: ${courseName || i18n.notVisible}`);
+      if (subjectList.length > 0) details.push(`বিষয় ও নম্বর: ${subjectList.slice(0, 5).join('; ')}`);
+      details.push(`মোট প্রাপ্ত নম্বর: ${totalMarks || i18n.notVisible}`);
+      details.push(`শতাংশ / CGPA: ${percentage || i18n.notVisible}`);
+      details.push(`ফলাফল: ${resultStatus || i18n.notVisible}`);
+      whatMeans = 'এর অর্থ শিক্ষার্থী এই পরীক্ষায় সফলভাবে উত্তীর্ণ হয়েছেন এবং পরবর্তী ক্লাসে ভর্তির জন্য যোগ্য।';
+      whatToDo = `${i18n.actionTitle} এই মূল মার্কশিটটি নিরাপদে সংরক্ষণ করুন এবং ভবিষ্যতের জন্য ফটোকপি করিয়ে রাখুন।`;
+    } else if (language === 'ta') {
+      whatIs = 'இது ஒரு பள்ளி அல்லது கல்லூரி மதிப்பெண் பட்டியல் ஆகும். இதில் மாணவர் பெற்ற மதிப்பெண்கள் மற்றும் தேர்வு முடிவுகள் உள்ளன.';
+      details.push(`மாணவர் பெயர்: ${studentName || i18n.notVisible}`);
+      details.push(`பதிவு எண்: ${rollNo || i18n.notVisible}`);
+      details.push(`வகுப்பு / தேர்வு: ${courseName || i18n.notVisible}`);
+      if (subjectList.length > 0) details.push(`பாடங்கள் & மதிப்பெண்கள்: ${subjectList.slice(0, 5).join('; ')}`);
+      details.push(`மொத்த மதிப்பெண்: ${totalMarks || i18n.notVisible}`);
+      details.push(`சதவீதம் / CGPA: ${percentage || i18n.notVisible}`);
+      details.push(`முடிவு: ${resultStatus || i18n.notVisible}`);
+      whatMeans = 'மாணவர் இந்தத் தேர்வில் தேர்ச்சி பெற்றுள்ளார் என்பதை இந்த ஆவணம் உறுதிப்படுத்துகிறது.';
+      whatToDo = `${i18n.actionTitle} இந்த அசல் மதிப்பெண் பட்டியலைப் பாதுகாப்பாக வைத்து, அடுத்த சேர்க்கைக்கு நகல்களைத் தயார் செய்யுங்கள்.`;
+    } else if (language === 'te') {
+      whatIs = 'ఇది ఒక విద్యా సంస్థకు చెందిన మార్కుల జాబితా (మార్క్‌షీట్). విద్యార్థి సాధించిన మార్కులు ఇందులో ఉన్నాయి.';
+      details.push(`విద్యార్థి పేరు: ${studentName || i18n.notVisible}`);
+      details.push(`రోల్ నంబర్: ${rollNo || i18n.notVisible}`);
+      details.push(`తరగతి / పరీక్ష: ${courseName || i18n.notVisible}`);
+      if (subjectList.length > 0) details.push(`విషయాలు & మార్కులు: ${subjectList.slice(0, 5).join('; ')}`);
+      details.push(`మొత్తం మార్కులు: ${totalMarks || i18n.notVisible}`);
+      details.push(`శాతం / CGPA: ${percentage || i18n.notVisible}`);
+      details.push(`ఫలితం: ${resultStatus || i18n.notVisible}`);
+      whatMeans = 'విద్యార్థి పరీక్షలో ఉత్తీర్ణులయ్యారని మరియు పై చదువులకు అర్హత సాధించారని ఇది తెలుపుతుంది.';
+      whatToDo = `${i18n.actionTitle} ఈ ఒరిజినల్ మార్క్‌షీట్‌ను భద్రపరచుకోండి మరియు తదుపరి అడ్మిషన్ల కోసం జిరాక్స్ కాపీలు ఉంచుకోండి.`;
+    } else if (language === 'mr') {
+      whatIs = 'ही एका शाळा किंवा कॉलेजची गुणपत्रिका (मार्कशीट) आहे, ज्यामध्ये विद्यार्थ्याच्या विषयानुसार मिळालेल्या गुणांची नोंद आहे.';
+      details.push(`विद्यार्थ्याचे नाव: ${studentName || i18n.notVisible}`);
+      details.push(`अनुक्रमांक (Roll No): ${rollNo || i18n.notVisible}`);
+      details.push(`वर्ग व मंडळ: ${courseName || i18n.notVisible}`);
+      if (subjectList.length > 0) details.push(`विषय व गुण: ${subjectList.slice(0, 5).join('; ')}`);
+      details.push(`एकूण गुण: ${totalMarks || i18n.notVisible}`);
+      details.push(`टक्केवारी / CGPA: ${percentage || i18n.notVisible}`);
+      details.push(`निकाल: ${resultStatus || i18n.notVisible}`);
+      whatMeans = 'विद्यार्थ्याने ही परीक्षा यशस्वीरीत्या उत्तीर्ण केली असून ते पुढील वर्गात प्रवेशास पात्र आहेत.';
+      whatToDo = `${i18n.actionTitle} ही मूळ गुणपत्रिका सुरक्षित फायलीत ठेवा आणि पुढील प्रवेशासाठी काही सत्यप्रती (झेरॉक्स) तयार ठेवा.`;
     } else {
       whatIs = readingLevel === 'simple'
-        ? 'This is a school or college marksheet showing student examination scores and grades.'
-        : 'This is an academic Statement of Marks detailing course performance, subject-wise scores, total marks, and examination result.';
+        ? 'This is a school or college marksheet showing student examination scores, subjects, and pass/fail result.'
+        : 'This is an academic Statement of Marks detailing course performance, subject-wise scores, total aggregate marks, and examination result.';
 
       details.push(`Student Name: ${studentName || i18n.notVisible}`);
       details.push(`Roll / Reg No: ${rollNo || i18n.notVisible}`);
-      details.push(`Class / Examination: ${courseName || i18n.notVisible}`);
+      details.push(`Class / Board: ${courseName || i18n.notVisible}`);
       if (subjectList.length > 0) {
-        details.push(`Visible Subjects & Scores: ${subjectList.slice(0, 5).join('; ')}`);
+        details.push(`Visible Subjects & Scores: ${subjectList.slice(0, 6).join('; ')}`);
       } else {
         details.push(`Subjects & Marks: ${i18n.notVisible}`);
       }
@@ -428,13 +436,12 @@ export function parseDocumentLocally(text, language = 'en', readingLevel = 'simp
       details.push(`Result Status: ${resultStatus || i18n.notVisible}`);
 
       whatMeans = readingLevel === 'simple'
-        ? 'This document shows the marks obtained in the exams. If marked as passed, the student is qualified for the next class or degree.'
-        : 'This official document certifies the academic completion of the designated coursework. Total aggregate scores determine eligibility for subsequent progression and admissions.';
+        ? 'This document confirms that the student took the examination and has passed, qualifying them for the next class, college admission, or scholarships.'
+        : 'This official document certifies academic completion. The total marks and percentage establish eligibility for university admissions and employment verification.';
 
-      whatToDo = `${i18n.actionTitle} Preserve this original marksheet safely in your records and keep photocopies ready for academic admissions or verification.`;
+      whatToDo = `${i18n.actionTitle} Store this original marksheet safely in a protective file. Prepare multiple photocopies for academic admissions and official verification.`;
     }
   } else if (docType === 'medical') {
-    // Extract Medical Fields
     let patient = null;
     let hospital = null;
     let diagnosis = null;
@@ -445,64 +452,92 @@ export function parseDocumentLocally(text, language = 'en', readingLevel = 'simp
       if (!patient && l.includes('patient')) patient = line;
       if (!hospital && (l.includes('hospital') || l.includes('clinic'))) hospital = line;
       if (!diagnosis && (l.includes('diagnosis') || l.includes('condition'))) diagnosis = line;
-      if (!totalAmt && (l.includes('total') || l.includes('bill') || l.includes('amount') || l.includes('$') || l.includes('₹'))) totalAmt = line;
+      if (!totalAmt && (l.includes('total') || l.includes('bill') || l.includes('charges') || l.includes('$') || l.includes('₹') || l.includes('rs'))) totalAmt = line;
     }
 
     if (language === 'hi') {
-      whatIs = 'यह अस्पताल का मेडिकल बिल या डिस्चार्ज सारांश है।';
+      whatIs = 'यह अस्पताल का डिस्चार्ज बिल और मेडिकल सारांश है। इसमें इलाज, कमरे का किराया, जांच और देय राशि का विवरण दिया गया है।';
       details.push(`अस्पताल का नाम: ${hospital || i18n.notVisible}`);
       details.push(`मरीज का नाम: ${patient || i18n.notVisible}`);
       details.push(`बीमारी / निदान: ${diagnosis || i18n.notVisible}`);
-      details.push(`बिल राशि: ${totalAmt || i18n.notVisible}`);
-      whatMeans = 'यह दस्तावेज़ अस्पताल में हुए इलाज, जांच और देय राशि का विवरण देता है।';
-      whatToDo = `${i18n.actionTitle} अस्पताल की अंतिम रसीद और दवाओं की पर्ची सुरक्षित रख लें और डॉक्टर द्वारा दी गई सलाह का पालन करें।`;
+      details.push(`बिल का कुल ब्यौरा: ${totalAmt || i18n.notVisible}`);
+      whatMeans = 'यह दस्तावेज़ अस्पताल में हुए इलाज का विवरण देता है। बीमा से स्वीकृत राशि घटाकर जो शेष रकम बचती है, वह अस्पताल के काउंटर पर चुकानी होती है।';
+      whatToDo = `${i18n.actionTitle} अस्पताल के काउंटर से मुहर लगी अंतिम रसीद (Paid Receipt) और डिस्चार्ज पर्चा प्राप्त करें। डॉक्टर द्वारा लिखी गई दवाओं का नियमित सेवन करें और फॉलो-अप तारीख याद रखें।`;
     } else {
-      whatIs = 'This is a hospital medical invoice or patient discharge summary.';
+      whatIs = 'This is a hospital inpatient discharge summary and billing statement outlining clinical diagnosis and treatment charges.';
       details.push(`Hospital / Clinic: ${hospital || i18n.notVisible}`);
       details.push(`Patient: ${patient || i18n.notVisible}`);
-      details.push(`Diagnosis: ${diagnosis || i18n.notVisible}`);
-      details.push(`Total Charges: ${totalAmt || i18n.notVisible}`);
-      whatMeans = 'This record documents the clinical treatment received and itemized fees charged.';
-      whatToDo = `${i18n.actionTitle} Keep the hospital billing receipt and discharge prescription in a safe file for future reference.`;
+      details.push(`Clinical Diagnosis: ${diagnosis || i18n.notVisible}`);
+      details.push(`Billing Details: ${totalAmt || i18n.notVisible}`);
+      whatMeans = 'This record documents diagnostic tests, room charges, and pharmaceutical costs incurred, showing any remaining patient out-of-pocket balance.';
+      whatToDo = `${i18n.actionTitle} Obtain an itemized stamped paid receipt from the billing desk, keep the prescription safe, and attend scheduled follow-up visits.`;
+    }
+  } else if (docType === 'insurance') {
+    if (language === 'hi') {
+      whatIs = 'यह आपकी स्वास्थ्य बीमा कंपनी का क्लेम नोटिस है। इसमें क्लेम पर पुनर्विचार करने या जरूरी कागजात जमा करने का निर्देश दिया गया है।';
+      details.push(`दस्तावेज़: स्वास्थ्य बीमा क्लेम नोटिस`);
+      details.push(`मुख्य विषय: दस्तावेज़ों की कमी या पॉलिसी शर्त (Clause) का हवाला`);
+      details.push(`समय-सीमा: नोटिस में दी गई समयावधि (सामान्यतः 15 से 30 दिन)`);
+      whatMeans = 'कंपनी ने आपका क्लेम हमेशा के लिए खारिज नहीं किया है, बल्कि कुछ अनिवार्य कागजात (जैसे डॉक्टर का पहला पर्चा या बिल) मांगे हैं।';
+      whatToDo = `${i18n.actionTitle} अस्पताल से मांगे गए अतिरिक्त मेडिकल रिकॉर्ड प्राप्त करें और दी गई समय-सीमा के अंदर बीमा पोर्टल पर अपलोड करें अथवा अपने बीमा एजेंट से तुरंत संपर्क करें।`;
+    } else {
+      whatIs = 'This is a formal communication from your health insurance provider regarding a pending claim review or documentation deficiency.';
+      details.push(`Document: Insurance Claim Admissibility Notice`);
+      details.push(`Subject: Requirement for additional substantiating records under policy clauses`);
+      details.push(`Submission Window: Within specified calendar days`);
+      whatMeans = 'The claim is held in abeyance pending clarification rather than permanently closed, provided required documents are submitted.';
+      whatToDo = `${i18n.actionTitle} Collect the specified clinical consultation notes or pharmacy invoices from your provider and upload them to the insurer portal before the deadline.`;
+    }
+  } else if (docType === 'legal') {
+    if (language === 'hi') {
+      whatIs = 'यह एक औपचारिक कानूनी सूचना पत्र (Legal Notice) है, जो वकील या मकान मालिक द्वारा किसी समझौते के उल्लंघन के संदर्भ में भेजा गया है।';
+      details.push(`दस्तावेज़: कानूनी सूचना पत्र / बेदखली नोटिस`);
+      details.push(`मुख्य मांग: बकाया राशि का भुगतान अथवा नियमों का पालन`);
+      details.push(`समय-सीमा: नोटिस में निर्धारित मोहलत (जैसे 14 या 30 दिन)`);
+      whatMeans = 'यह नोटिस चेतावनी देता है कि यदि तय समय के अंदर बकाया नहीं चुकाया गया या समस्या का समाधान नहीं किया गया, तो कानूनी कार्रवाई शुरू की जा सकती है।';
+      whatToDo = `${i18n.actionTitle} नोटिस में दी गई तारीख से पहले संबंधित पक्ष से मिलकर समाधान करें और जो भी भुगतान करें, उसकी लिखित व हस्ताक्षरित रसीद अनिवार्य रूप से अपने पास रखें।`;
+    } else {
+      whatIs = 'This is a formal statutory legal notice issued by legal counsel concerning contractual compliance or tenancy default.';
+      details.push(`Document: Legal Notice to Cure or Vacate`);
+      details.push(`Demand: Settlement of outstanding balance or compliance`);
+      details.push(`Statutory Window: Time period specified to remedy the issue`);
+      whatMeans = 'The communication establishes a formal deadline to cure the default, failing which formal legal proceedings may be initiated.';
+      whatToDo = `${i18n.actionTitle} Contact the issuing party or your legal representative within the specified window, settle any verified obligations, and obtain signed written receipts.`;
     }
   } else if (docType === 'identity') {
     if (language === 'hi') {
-      whatIs = 'यह एक आधिकारिक पहचान पत्र (जैसे आधार कार्ड या पैन कार्ड) है।';
-      details.push(`कार्ड प्रकार: ${lines[0] || 'सरकारी पहचान पत्र'}`);
-      details.push(`पहचान संख्या: सुरक्षित रखने के लिए केवल अंतिम अंक मान्य रखें`);
-      details.push(`नाम व विवरण: दस्तावेज़ पर अंकित नाम के अनुसार`);
-      whatMeans = 'यह कार्ड आपकी आधिकारिक पहचान और नागरिकता प्रमाणित करने के लिए प्रयोग होता है।';
-      whatToDo = `${i18n.actionTitle} इस पहचान पत्र को सुरक्षित रखें और इसकी जानकारी किसी अनजान व्यक्ति के साथ साझा न करें।`;
+      whatIs = 'यह भारत सरकार अथवा राज्य प्राधिकरण द्वारा जारी आधिकारिक पहचान पत्र (जैसे आधार कार्ड, पैन कार्ड या पहचान पत्र) है।';
+      details.push(`दस्तावेज़: आधिकारिक राष्ट्रीय पहचान पत्र`);
+      details.push(`गोपनीयता: पहचान संख्या सुरक्षित रखी गई है`);
+      details.push(`नाम व विवरण: कार्ड पर प्रदर्शित आधिकारिक नाम के अनुरूप`);
+      whatMeans = 'यह कार्ड विभिन्न सरकारी योजनाओं, बैंक खातों और सेवाओं में आपकी नागरिकता एवं व्यक्तिगत पहचान का वैध कानूनी प्रमाण है।';
+      whatToDo = `${i18n.actionTitle} इस पहचान पत्र को सुरक्षित रखें। किसी भी अनजान व्यक्ति या अविश्वसनीय वेबसाइट के साथ अपनी पूरी पहचान संख्या या ओटीपी साझा न करें।`;
     } else {
-      whatIs = 'This is an official government identity card (such as Aadhaar or PAN card).';
-      details.push(`Document: Official Government ID`);
-      details.push(`Identity Number: Keep secure, masked for privacy`);
-      details.push(`Details: As displayed on the identity card`);
-      whatMeans = 'This document serves as proof of legal identity and residency.';
-      whatToDo = `${i18n.actionTitle} Keep this ID card securely and never share sensitive numbers with unverified third parties.`;
+      whatIs = 'This is an official national or state identity card confirming legal identity and personal registration.';
+      details.push(`Document: Government Identity Card`);
+      details.push(`Privacy: Identification numbers masked for personal protection`);
+      details.push(`Holder Details: As verified on the physical card`);
+      whatMeans = 'This credential functions as legal proof of identity and residency for banking, civil services, and official applications.';
+      whatToDo = `${i18n.actionTitle} Maintain this ID credential securely and avoid sharing sensitive identity numbers with unverified third parties.`;
     }
   } else {
-    // Generic Document handling - ONLY based on actual visible text
-    const samplePreview = lines.slice(0, 4).join(' — ');
-
     if (language === 'hi') {
-      whatIs = `यह एक आधिकारिक दस्तावेज़ है। इसमें निम्नलिखित जानकारी दिखाई दे रही है:`;
-      details.push(`शीर्षक / मुख्य पंक्ति: ${lines[0] || i18n.notVisible}`);
-      if (lines[1]) details.push(`विवरण पंक्ति: ${lines[1]}`);
-      if (lines[2]) details.push(`संदर्भ / दिनांक: ${lines[2]}`);
-      whatMeans = 'यह दस्तावेज़ संबंधित कार्यालय या संस्था द्वारा आपको जानकारी अथवा निर्देश देने हेतु जारी किया गया है।';
-      whatToDo = `${i18n.actionTitle} इस दस्तावेज़ में दी गई तारीख और निर्देशों की पुष्टि संबंधित संस्था से करें।`;
+      whatIs = 'यह एक आधिकारिक दस्तावेज़ है। इसमें निम्नलिखित मुख्य जानकारी दिखाई दे रही है:';
+      details.push(`मुख्य शीर्षक: ${lines[0] || i18n.notVisible}`);
+      if (lines[1]) details.push(`संबंधित विवरण: ${lines[1]}`);
+      if (lines[2]) details.push(`दिनांक व संदर्भ: ${lines[2]}`);
+      whatMeans = 'यह दस्तावेज़ संबंधित विभाग अथवा संस्था द्वारा किसी सेवा, खाते अथवा निर्देश के संबंध में जारी किया गया है।';
+      whatToDo = `${i18n.actionTitle} इस दस्तावेज़ में उल्लिखित संदर्भ संख्या और अंतिम तारीख की पुष्टि संबंधित विभाग या कार्यालय से कर लें और इसकी एक प्रति सुरक्षित रखें।`;
     } else {
-      whatIs = `This is an official document containing the following visible text:`;
+      whatIs = 'This is an official correspondence containing verified recorded text as follows:';
       details.push(`Header: ${lines[0] || i18n.notVisible}`);
-      if (lines[1]) details.push(`Line item: ${lines[1]}`);
+      if (lines[1]) details.push(`Subject details: ${lines[1]}`);
       if (lines[2]) details.push(`Reference / Date: ${lines[2]}`);
-      whatMeans = 'This correspondence conveys instructions or records from the issuing organization.';
-      whatToDo = `${i18n.actionTitle} Verify the reference numbers and dates with the issuing organization.`;
+      whatMeans = 'This document communicates directives, transactions, or administrative confirmations from the issuing authority.';
+      whatToDo = `${i18n.actionTitle} Retain this record in your files and cross-reference the date and reference codes with the issuing office if action is required.`;
     }
   }
 
-  // Construct structured explanation body
   const explanation = `${i18n.docTypeTitle}\n${docTypeLabel}\n\n${i18n.whatIsTitle}\n${whatIs}\n\n${i18n.detailsTitle}\n${details.map((d) => `- ${d}`).join('\n')}\n\n${i18n.meansTitle}\n${whatMeans}`;
 
   return {

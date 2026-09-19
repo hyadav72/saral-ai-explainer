@@ -65,62 +65,51 @@ export async function generateExplanation({
   // Level instructions
   const levelInstructions =
     readingLevel === 'simple'
-      ? 'Target reading level: VERY SIMPLE. Use short, plain sentences and common everyday vocabulary. Avoid technical, legal, or bureaucratic jargon.'
-      : 'Target reading level: CLEAR. Use plain, respectful conversational language with helpful context, completely free of dense jargon.';
+      ? 'TARGET AUDIENCE & TONE: VERY SIMPLE. Write as if you are a kind, patient teacher or family member explaining to an elderly citizen or someone with limited formal education. Use short, crisp sentences and warm everyday conversational vocabulary. If technical, medical, or legal terms appear, explain them immediately in plain everyday analogies. Focus directly on answering: "What does this mean for me?" and "What exact step should I take today?".'
+      : 'TARGET AUDIENCE & TONE: CLEAR & COMPREHENSIVE. Provide a thorough, well-structured explanation in plain language. Break down financial calculations and legal clauses clearly while avoiding bureaucratic or obscure jargon. Keep the tone respectful, clear, and reassuring.';
 
-  const systemPrompt = `You are Saral, an empathetic, highly accurate document explainer designed to help citizens, elderly people, and vernacular readers understand their real documents.
+  const systemPrompt = `You are Saral, an empathetic, highly skilled document explainer designed to bridge the literacy and language divide for everyday citizens.
 
-STRICT INSTRUCTIONS:
-1. DOCUMENT TYPE DETECTION: Before explaining, inspect the document and identify what type of document it actually is (e.g. Marksheet / Report card, Identity document like Aadhaar/PAN, Bank statement/document, Insurance notice, Medical bill/summary, Legal notice, Government letter, Application form, Certificate, Invoice, or Other). Do NOT assume or force an incorrect document type.
-2. ZERO HALLUCINATION / FACTUAL ACCURACY: Analyze ONLY the information visible in the document. Do NOT assume, infer, invent, or fabricate information that is not visible. If any value (like a marksheet score, student name, roll number, fee, or date) is unreadable or not visible, you MUST explicitly write: "${notVisibleText}". NEVER guess or make up marks, grades, names, dates, or numbers.
-3. UNREADABLE CHECK: If the document is completely unreadable, too blurry, or contains no readable document content, reply ONLY with this exact sentence: "${langConfig.unreadableMsg}"
-4. STRUCTURED RESPONSE: Format your output with clear sections:
+CORE EXPLANATION PRINCIPLES:
+1. FIRST IDENTIFY DOCUMENT TYPE: Inspect the document carefully and determine its real-world category (e.g. Marksheet / Academic Report Card, Hospital Discharge Bill, Health Insurance Query Notice, Tenancy Eviction Notice, Identity Document, Bank Statement, Government Scheme Letter, Invoice, or Certificate).
+2. ZERO HALLUCINATION / 100% FACTUAL FIDELITY: Analyze ONLY the information visible in the document. Never guess, extrapolate, or invent names, dates, roll numbers, marks, penalty sums, or deadlines. If any specific detail is unreadable, faded, or absent, you MUST state: "${notVisibleText}".
+3. UNREADABLE CHECK: If the document is completely illegible, blurry, blank, or contains no readable official document text, respond ONLY with this exact sentence: "${langConfig.unreadableMsg}"
+4. EXCELLENCE IN EXPLAINING:
+   - For Marksheets: Clearly identify the student, board/school, subjects, marks/grades, total score, percentage, and pass/fail outcome. Explain what the division or percentage means for the student.
+   - For Medical Bills: Demystify complex diagnoses into simple everyday language. Break down gross hospital charges, insurance portion, and out-of-pocket balance due.
+   - For Insurance Notices: Explain why the claim was questioned or held, decode the cited clause in plain terms, and state the exact required missing papers and calendar deadline.
+   - For Tenancy / Legal Notices: Explain the core dispute, the exact outstanding balance, the cure window, and how to pay with written verification.
+5. REQUIRED STRUCTURED LAYOUT: Format your output with clear, legible sections:
 Document type:
-[Detected document type]
+[Exact detected document type]
 
 What this document is:
-[Brief explanation of what this document is based strictly on visible content]
+[Warm, human explanation of what this document is based strictly on visible content]
 
 Important details:
-- [Key detail 1 with name/subject/dates/numbers]
-- [Key detail 2]
-- [Key detail 3]
+- [Detail 1: Name / ID / Reference number]
+- [Detail 2: Key figures / Scores / Dates / Amounts]
+- [Detail 3: Additional relevant visible terms]
 
 What it means:
-[Plain-language explanation of the outcome, pass/fail status, or significance]
+[Plain-language breakdown of the implications, pass/fail status, legal consequences, or financial breakdown]
 
 What you should do:
-${actionPrefix} [One or two specific, practical next steps based ONLY on visible instructions]
+${actionPrefix} [Clear, prioritized, practical next steps that the person must take based strictly on the document instructions]
 
-5. EXCLUSIVE TARGET LANGUAGE: You MUST write your entire response exclusively in ${targetLanguage} (${langConfig.native}).
-6. ${levelInstructions}`;
+6. EXCLUSIVE TARGET LANGUAGE: You MUST write your entire response exclusively in ${targetLanguage} (${langConfig.native}).
+7. ${levelInstructions}`;
 
-  // 1. If an image is uploaded, run OCR extraction first to inspect image content
-  let ocrResult = null;
-  if (image && image.data) {
-    ocrResult = await extractTextFromImage(image.data);
-    console.log(`OCR extraction completed: ${ocrResult.wordsCount} words found, confidence ${ocrResult.confidence}%`);
+  // OPTIMIZED WORKFLOW:
+  // If an AI Vision key is available, call the multimodal model directly for maximum speed and comprehension!
+  // If no cloud API key is set, or if the cloud API fails, seamlessly use the local OCR & Document Intelligence engine.
 
-    // If OCR found no words at all, check if it's completely unreadable
-    if (ocrResult.isUnreadable && !anthropicKey && !geminiKey) {
-      return {
-        rawText: langConfig.unreadableMsg,
-        isNoText: true,
-        documentType: '',
-        explanation: '',
-        actionableAdvice: '',
-        unreadableMessage: langConfig.unreadableMsg
-      };
-    }
-  }
-
-  // 2. Multimodal AI Option A: Anthropic Claude Vision
+  // 1. Multimodal AI: Anthropic Claude Vision
   if (anthropicKey && anthropicKey !== 'mock' && anthropicKey.length > 10) {
     try {
-      console.log('Using Anthropic Claude for vision/text document explanation...');
+      console.log('⚡ Running Anthropic Claude multimodal document analysis...');
       const anthropic = new Anthropic({ apiKey: anthropicKey });
 
-      // Map model to valid model name
       let model = process.env.ANTHROPIC_MODEL || 'claude-3-7-sonnet-20250219';
       if (model.includes('claude-sonnet-4-6')) {
         model = 'claude-3-7-sonnet-20250219';
@@ -139,11 +128,10 @@ ${actionPrefix} [One or two specific, practical next steps based ONLY on visible
             data: image.data
           }
         });
-        const promptText = ocrResult?.text
-          ? `Please analyze this uploaded document image. Read all text, identify the exact document type (e.g. marksheet, medical bill, id, notice), extract visible details accurately, and provide a structured explanation according to system instructions.\n\n(Supplementary OCR text detected: ${ocrResult.text.substring(0, 1000)})`
-          : 'Please analyze this uploaded document image. Read all text, identify the exact document type (e.g. marksheet, medical bill, id, notice), extract visible details accurately, and provide a structured explanation according to system instructions.';
-
-        content.push({ type: 'text', text: promptText });
+        content.push({
+          type: 'text',
+          text: 'Please carefully analyze this uploaded document image. Identify document type, extract all visible details with zero hallucination, explain it clearly, and output in the structured format.'
+        });
       } else {
         content.push({
           type: 'text',
@@ -166,15 +154,14 @@ ${actionPrefix} [One or two specific, practical next steps based ONLY on visible
 
       return parseOutputResponse(outputText, actionPrefix, langConfig);
     } catch (anthropicErr) {
-      console.error('Anthropic API Error:', anthropicErr?.message || anthropicErr);
-      // Fall through to Gemini or OCR
+      console.warn('Anthropic API error, falling back to next provider / local engine:', anthropicErr?.message || anthropicErr);
     }
   }
 
-  // 3. Multimodal AI Option B: Google Gemini Vision
+  // 2. Multimodal AI: Google Gemini Vision
   if (geminiKey && geminiKey.length > 10) {
     try {
-      console.log('Using Google Gemini Vision for document explanation...');
+      console.log('⚡ Running Google Gemini Vision document analysis...');
       const genAI = new GoogleGenerativeAI(geminiKey);
       const model = genAI.getGenerativeModel({
         model: 'gemini-1.5-flash',
@@ -190,7 +177,7 @@ ${actionPrefix} [One or two specific, practical next steps based ONLY on visible
           }
         });
         parts.push({
-          text: 'Analyze this uploaded document image accurately. Identify document type, extract visible details without hallucinating, and explain in structured format.'
+          text: 'Carefully analyze this uploaded document image. Identify the document type, extract visible details accurately without hallucinating, and provide a structured explanation.'
         });
       } else {
         parts.push({ text: `Analyze this document text:\n\n${text}` });
@@ -200,16 +187,33 @@ ${actionPrefix} [One or two specific, practical next steps based ONLY on visible
       const outputText = result.response.text();
       return parseOutputResponse(outputText, actionPrefix, langConfig);
     } catch (geminiErr) {
-      console.error('Gemini API Error:', geminiErr?.message || geminiErr);
+      console.warn('Gemini API error, falling back to local OCR engine:', geminiErr?.message || geminiErr);
     }
   }
 
-  // 4. Local OCR & Document Intelligence Analyzer (When no cloud API key is set, or as fallback)
-  console.log('Using Local Document Intelligence & OCR Engine...');
+  // 3. Local OCR & Document Intelligence Engine (Runs offline or as zero-cost engine)
+  console.log('⚡ Running Local Document Intelligence & OCR Engine...');
 
-  const documentContent = (image && image.data) ? ocrResult?.text : text;
+  let documentContent = text;
 
-  // If literally unreadable or empty
+  if (image && image.data) {
+    const ocrResult = await extractTextFromImage(image.data);
+    console.log(`OCR extraction: ${ocrResult.wordsCount} words found, confidence ${ocrResult.confidence}%`);
+
+    if (ocrResult.isUnreadable) {
+      return {
+        rawText: langConfig.unreadableMsg,
+        isNoText: true,
+        documentType: '',
+        explanation: '',
+        actionableAdvice: '',
+        unreadableMessage: langConfig.unreadableMsg
+      };
+    }
+    documentContent = ocrResult.text;
+  }
+
+  // If text is too short or empty
   if (!documentContent || documentContent.trim().length < 5) {
     return {
       rawText: langConfig.unreadableMsg,
@@ -221,7 +225,7 @@ ${actionPrefix} [One or two specific, practical next steps based ONLY on visible
     };
   }
 
-  // Real local analysis of extracted document text
+  // Run local intelligent document analyzer
   const localResult = parseDocumentLocally(documentContent, language, readingLevel);
   return localResult;
 }
@@ -245,12 +249,12 @@ function parseOutputResponse(fullText, actionPrefix, langConfig) {
   // Extract Document Type line if present
   let documentType = '';
   const lines = fullText.split('\n');
-  for (let i = 0; i < Math.min(lines.length, 4); i++) {
+  for (let i = 0; i < Math.min(lines.length, 5); i++) {
     const line = lines[i].trim();
     if (
       line.toLowerCase().startsWith('document type') ||
       line.startsWith('दस्तावेज़ का प्रकार') ||
-      line.startsWith('নথির ধরন') ||
+      line.startsWith('नथिर ধরন') ||
       line.startsWith('ஆவண வகை') ||
       line.startsWith('పత్రం రకం') ||
       line.startsWith('दस्तऐवजाचा प्रकार')
